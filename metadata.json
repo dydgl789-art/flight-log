@@ -1,0 +1,6 @@
+{
+  "name": "SkyLog Pro - 드론 비행 안전 플래너",
+  "description": "실시간 NOAA Kp 지자기 지수 및 풍속 기상 연동, 지도 기반 비행 금지 구역(P-73/관제권) 확인, 비행 HUD 타이머 및 비행 일지 관리 드론 웹앱",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
