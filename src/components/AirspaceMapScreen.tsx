@@ -64,9 +64,9 @@ export const AirspaceMapScreen: React.FC<AirspaceMapScreenProps> = ({
       zoomControl: false,
     });
 
-    // Clean Dark/Subdued Map Tiles (CartoDB Dark Matter / OSM)
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-      attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+    // 무료 OpenStreetMap 표준 타일 (API 키 불필요)
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
       maxZoom: 19,
     }).addTo(map);
 
@@ -188,17 +188,27 @@ export const AirspaceMapScreen: React.FC<AirspaceMapScreenProps> = ({
         setIsLocatingGps(false);
         const { latitude, longitude } = pos.coords;
         if (mapInstanceRef.current && markerRef.current) {
-          mapInstanceRef.current.flyTo([latitude, longitude], 14, { duration: 1 });
+          mapInstanceRef.current.flyTo([latitude, longitude], 15, { duration: 1 });
           markerRef.current.setLatLng([latitude, longitude]);
         }
         handleLocationChange(latitude, longitude, '현재 내 GPS 위치');
       },
       (err) => {
         setIsLocatingGps(false);
-        console.warn('GPS Error:', err.message);
-        alert('GPS 위치를 가져올 수 없습니다. 지도를 직접 터치하여 위치를 지정해 주세요.');
+        console.warn('GPS Error:', err.code, err.message);
+        if (err.code === 1) {
+          alert('브라우저 위치 권한이 차단되어 있습니다. 주소창 좌측의 사이트 설정 아이콘에서 위치 권한을 허용해주세요.');
+        } else if (err.code === 3) {
+          alert('위치 요청 시간이 초과되었습니다. 다시 한 번 시도해주세요.');
+        } else {
+          alert('GPS 위치를 가져올 수 없습니다. 지도를 직접 터치하여 위치를 지정해 주세요.');
+        }
       },
-      { timeout: 8000, enableHighAccuracy: true }
+      {
+        timeout: 12000,
+        enableHighAccuracy: true,
+        maximumAge: 0,
+      }
     );
   };
 
