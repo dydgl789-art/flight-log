@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>드론 현장 비행 타이머</title>
+  <style>
+    /* 기본 다크 테마 (현장 준비용) */
+    :root {
+      --bg: #121417;
+      --card-bg: #1c2128;
+      --text: #f0f6fc;
+      --sub-text: #8b949e;
+      --border: #30363d;
+      --primary: #388bfd;
+      --danger: #f85149;
+      --warning: #d29922;
+      --border-thick: 1px;
+    }
+
+    /* 야외 직사광선 고대비 모드 (Sunlight Mode) */
+    body.sunlight-mode {
+      --bg: #ffffff;
+      --card-bg: #ffffff;
+      --text: #000000;
+      --sub-text: #111111;
+      --border: #000000;
+      --primary: #0000ff;
+      --danger: #cc0000;
+      --warning: #cc8800;
+      --border-thick: 3px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Pretendard", sans-serif; }
+    body { background-color: var(--bg); color: var(--text); min-height: 100vh; display: flex; flex-direction: column; padding: 16px; }
+
+    header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    h1 { font-size: 1.25rem; font-weight: 800; }
+
+    .btn-contrast {
+      background: var(--text); color: var(--bg); border: var(--border-thick) solid var(--border);
+      padding: 8px 12px; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 0.9rem;
+    }
+
+    .status-badge {
+      font-size: 0.8rem; padding: 4px 8px; border-radius: 4px; border: var(--border-thick) solid var(--border);
+      display: inline-block; margin-bottom: 12px;
+    }
+
+    /* 대형 타이머 카드 */
+    .timer-card {
+      background: var(--card-bg); border: var(--border-thick) solid var(--border);
+      border-radius: 16px; padding: 24px; text-align: center; margin-bottom: 16px;
+    }
+    .timer-label { font-size: 1rem; color: var(--sub-text); margin-bottom: 8px; font-weight: bold; }
+    .timer-display { font-size: 4rem; font-weight: 900; letter-spacing: -2px; font-variant-numeric: tabular-nums; }
+    .timer-display.overtime { color: var(--danger); animation: pulse 1s infinite alternate; }
+
+    @keyframes pulse { from { opacity: 1; } to { opacity: 0.5; } }
+
+    /* 제어 버튼 그룹 */
+    .btn-group { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+    .btn {
+      padding: 18px; border-radius: 12px; font-size: 1.25rem; font-weight: 800; cursor: pointer;
+      border: var(--border-thick) solid var(--border);
+    }
+    .btn-takeoff { background: var(--primary); color: #fff; }
+    .btn-land { background: var(--danger); color: #fff; }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* 설정 카드 */
+    .settings-card {
+      background: var(--card-bg); border: var(--border-thick) solid var(--border);
+      border-radius: 12px; padding: 16px; margin-bottom: 16px;
+    }
+    .setting-item { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+    .setting-item:last-child { margin-bottom: 0; }
+    select, input[type="text"] {
+      padding: 8px; border-radius: 6px; border: var(--border-thick) solid var(--border);
+      background: var(--bg); color: var(--text); font-weight: bold; font-size: 0.95rem;
+    }
+
+    /* 비행 일지 모달 */
+    .modal {
+      display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7);
+      justify-content: center; align-items: center; padding: 16px;
+    }
+    .modal-content {
+      background: var(--bg); border: var(--border-thick) solid var(--border);
+      padding: 24px; border-radius: 16px; width: 100%; max-width: 400px;
+    }
+    .modal h2 { margin-bottom: 16px; font-size: 1.2rem; }
+    .input-field { margin-bottom: 12px; }
+    .input-field label { display: block; font-size: 0.85rem; margin-bottom: 4px; color: var(--sub-text); }
+    .input-field input { width: 100%; }
+    .modal-actions { display: flex; gap: 8px; margin-top: 20px; }
+    .modal-actions .btn { font-size: 1rem; padding: 12px; width: 50%; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div>
+      <h1>DRONE TIMER</h1>
+      <span class="status-badge" id="wakeLockStatus">화면 켜짐: 대기 중</span>
+    </div>
+    <button class="btn-contrast" id="toggleContrast">☀️ 야외 고대비</button>
+  </header>
+
+  <div class="timer-card">
+    <div class="timer-label" id="timerStatus">이륙 대기 중</div>
+    <div class="timer-display" id="timeDisplay">00:00</div>
+  </div>
+
+  <div class="btn-group">
+    <button class="btn btn-takeoff" id="btnStart">이륙 (START)</button>
+    <button class="btn btn-land" id="btnStop" disabled>착륙 (LAND)</button>
+  </div>
+
+  <div class="settings-card">
+    <div class="setting-item">
+      <span>목표 비행시간 (배터리 기준)</span>
+      <select id="targetMinutes">
+        <option value="10">10분</option>
+        <option value="15" selected>15분</option>
+        <option value="20">20분</option>
+        <option value="25">25분</option>
+      </select>
+    </div>
+    <div class="setting-item">
+      <span>경과 음성 안내 주기</span>
+      <select id="announceInterval">
+        <option value="60">매 1분</option>
+        <option value="120" selected>매 2분</option>
+        <option value="300">매 5분</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- 비행 후 일지 자동 기록 팝업 -->
+  <div class="modal" id="logModal">
+    <div class="modal-content">
+      <h2>비행 완료 기록</h2>
+      <div class="input-field">
+        <label>비행 시간</label>
+        <input type="text" id="finalFlightTime" readonly>
+      </div>
+      <div class="input-field">
+        <label>배터리 팩 번호</label>
+        <input type="text" id="batteryId" placeholder="예: BATT-01">
+      </div>
+      <div class="input-field">
+        <label>착륙 후 잔여 배터리 (%)</label>
+        <input type="text" id="remainingVolt" placeholder="예: 25%">
+      </div>
+      <div class="modal-actions">
+        <button class="btn" style="background:#555; color:#fff;" id="btnCancelLog">닫기</button>
+        <button class="btn btn-takeoff" id="btnSaveLog">일지 저장</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let timer = null;
+    let secondsElapsed = 0;
+    let wakeLock = null;
+    let audioCtx = null;
+
+    // Web Audio 비프음 (프로펠러 소음 관통용 2KHz 주파음)
+    function playChime() {
+      try {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.frequency.setValueAtTime(1800, audioCtx.currentTime);
+        gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.2);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.2);
+      } catch (e) { console.error(e); }
+    }
+
+    // Web Speech API 음성 안내 (100% 무료 로컬 TTS)
+    function speak(text) {
+      if (!('speechSynthesis' in window)) return;
+      playChime();
+      setTimeout(() => {
+        const utter = new SpeechSynthesisUtterance(text);
+        utter.lang = 'ko-KR';
+        utter.rate = 1.05;
+        window.speechSynthesis.speak(utter);
+      }, 250);
+    }
+
+    // 화면 꺼짐 방지 (Screen Wake Lock)
+    async function requestWakeLock() {
+      if ('wakeLock' in navigator) {
+        try {
+          wakeLock = await navigator.wakeLock.request('screen');
+          document.getElementById('wakeLockStatus').innerText = "화면 켜짐: 유지 중 (ON)";
+        } catch (err) {
+          console.error(err);
+        }
+      }
+    }
+
+    function releaseWakeLock() {
+      if (wakeLock) {
+        wakeLock.release();
+        wakeLock = null;
+        document.getElementById('wakeLockStatus').innerText = "화면 켜짐: 대기 중";
+      }
+    }
+
+    // 시간 포맷
+    function formatTime(sec) {
+      const m = String(Math.floor(sec / 60)).padStart(2, '0');
+      const s = String(sec % 60).padStart(2, '0');
+      return `${m}:${s}`;
+    }
+
+    // 타이머 컨트롤
+    const btnStart = document.getElementById('btnStart');
+    const btnStop = document.getElementById('btnStop');
+    const timeDisplay = document.getElementById('timeDisplay');
+    const timerStatus = document.getElementById('timerStatus');
+
+    btnStart.addEventListener('click', async () => {
+      secondsElapsed = 0;
+      timeDisplay.innerText = "00:00";
+      timeDisplay.classList.remove('overtime');
+      btnStart.disabled = true;
+      btnStop.disabled = false;
+      timerStatus.innerText = "비행 중";
+
+      await requestWakeLock();
+      speak("이륙을 확인했습니다. 타이머를 시작합니다.");
+
+      const intervalSec = parseInt(document.getElementById('announceInterval').value);
+      const targetSec = parseInt(document.getElementById('targetMinutes').value) * 60;
+
+      timer = setInterval(() => {
+        secondsElapsed++;
+        timeDisplay.innerText = formatTime(secondsElapsed);
+
+        // 주기별 음성 안내
+        if (secondsElapsed > 0 && secondsElapsed % intervalSec === 0 && secondsElapsed < targetSec) {
+          const min = Math.floor(secondsElapsed / 60);
+          speak(`비행 시간 ${min}분 경과.`);
+        }
+
+        // 목표 1분 전 경고
+        if (secondsElapsed === targetSec - 60) {
+          speak("목표 시간 1분 전입니다. 착륙 준비를 시작하세요.");
+        }
+
+        // 목표 시간 초과 시
+        if (secondsElapsed === targetSec) {
+          timeDisplay.classList.add('overtime');
+          speak("목표 비행 시간에 도달했습니다. 즉시 착륙하세요.");
+        }
+      }, 1000);
+    });
+
+    btnStop.addEventListener('click', () => {
+      clearInterval(timer);
+      btnStart.disabled = false;
+      btnStop.disabled = true;
+      timerStatus.innerText = "착륙 완료";
+      releaseWakeLock();
+      speak("착륙을 확인했습니다. 비행을 종료합니다.");
+
+      // 모달에 비행 시간 자동 기입 후 띄우기
+      document.getElementById('finalFlightTime').value = formatTime(secondsElapsed);
+      document.getElementById('logModal').style.display = 'flex';
+    });
+
+    // 야외 고대비 모드 토글
+    const toggleContrast = document.getElementById('toggleContrast');
+    toggleContrast.addEventListener('click', () => {
+      document.body.classList.toggle('sunlight-mode');
+      toggleContrast.innerText = document.body.classList.contains('sunlight-mode') 
+        ? "🌙 기본 다크" 
+        : "☀️ 야외 고대비";
+    });
+
+    // 모달 제어 및 로컬 저장
+    document.getElementById('btnCancelLog').addEventListener('click', () => {
+      document.getElementById('logModal').style.display = 'none';
+    });
+
+    document.getElementById('btnSaveLog').addEventListener('click', () => {
+      const flightData = {
+        date: new Date().toISOString().slice(0, 10),
+        duration: document.getElementById('finalFlightTime').value,
+        batteryId: document.getElementById('batteryId').value,
+        remainingVolt: document.getElementById('remainingVolt').value
+      };
+      
+      const logs = JSON.parse(localStorage.getItem('drone_flight_logs') || '[]');
+      logs.push(flightData);
+      localStorage.setItem('drone_flight_logs', JSON.stringify(logs));
+
+      alert('비행 일지에 정상 저장되었습니다!');
+      document.getElementById('logModal').style.display = 'none';
+    });
+  </script>
+</body>
+</html>
