@@ -13,6 +13,7 @@ import {
   MapPin,
   Map,
   RotateCw,
+  Check,
 } from 'lucide-react';
 
 interface DashboardScreenProps {
@@ -43,7 +44,32 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
   onSimulateKp,
 }) => {
   const [showKpInfo, setShowKpInfo] = useState(false);
-  const [showWindInfo, setShowWindInfo] = useState(false);
+
+  // 이륙 전 체크리스트 상태 (기본 5개 항목)
+  const [checklist, setChecklist] = useState<Record<string, boolean>>({
+    propeller: true,
+    battery: true,
+    sensor: true,
+    failsafe: true,
+    surroundings: true,
+  });
+
+  const toggleCheck = (key: string) => {
+    setChecklist(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const allChecked = Object.values(checklist).every(Boolean);
+  const checkedCount = Object.values(checklist).filter(Boolean).length;
+
+  const setAllChecks = (status: boolean) => {
+    setChecklist({
+      propeller: status,
+      battery: status,
+      sensor: status,
+      failsafe: status,
+      surroundings: status,
+    });
+  };
 
   // NOAA Kp styling
   let kpBadgeClass = 'bg-[rgba(0,230,118,0.15)] text-[#00E676] border-[rgba(0,230,118,0.3)]';
@@ -183,7 +209,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
         )}
       </div>
 
-      {/* 2. 실시간 기상 및 풍속 모니터링 카드 (Weather & Wind Speed) */}
+      {/* 2. 실시간 기상 및 풍속 모니터링 카드 */}
       <div
         id="weather-card"
         className={`bg-[#191c24] rounded-[16px] p-[18px] border transition-all duration-300 ${windCardBorder}`}
@@ -212,7 +238,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
           </span>
         </div>
 
-        {/* Location selector trigger */}
+        {/* 위치 선택 트리거 */}
         <div className="flex items-center justify-between py-1 mb-2 text-xs border-b border-[#252a36]">
           <div className="flex items-center gap-1 text-[#e2e8f0] font-semibold truncate">
             <MapPin size={13} className="text-[#1E88E5] shrink-0" />
@@ -229,7 +255,6 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
 
         {weatherData ? (
           <div>
-            {/* Primary Wind Speed Display */}
             <div className="flex items-baseline justify-between mb-2">
               <div className="flex items-baseline gap-[6px]">
                 <span
@@ -257,7 +282,6 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
               </div>
             </div>
 
-            {/* Weather Metrics Row */}
             <div className="grid grid-cols-3 gap-1.5 py-2 px-2.5 bg-[#12141a] rounded-xl text-center text-xs mb-2 border border-[#232936]">
               <div>
                 <span className="text-[10px] text-gray-500 block">기온</span>
@@ -275,7 +299,6 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
               </div>
             </div>
 
-            {/* Suitability explanation */}
             <div className="text-[0.82rem] text-[#cbd5e0] leading-snug">
               {weatherData.flightSuitability}
             </div>
@@ -285,7 +308,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
         )}
       </div>
 
-      {/* 3. 비행 공역 및 비행 금지 구역 점검 카드 (Airspace Zone Check) */}
+      {/* 3. 비행 공역 및 비행 금지 구역 점검 카드 */}
       <div className="bg-[#191c24] rounded-[16px] p-[18px] border border-[#252a36]">
         <div className="flex justify-between items-center mb-2">
           <span className="text-[0.85rem] text-[#a0aec0] font-semibold flex items-center gap-1.5">
@@ -318,46 +341,173 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
         </button>
       </div>
 
-      {/* 4. 장비 체크 및 세팅 섹션 */}
+      {/* 4. 이륙 전 필수 안전 점검 섹션 (업그레이드 완료) */}
       <div className="flex items-center justify-between">
-        <h2 className="text-[0.85rem] uppercase tracking-[1px] text-[#718096] font-bold">
-          장비 체크 및 세팅
+        <h2 className="text-[0.85rem] uppercase tracking-[1px] text-[#718096] font-bold flex items-center gap-1.5">
+          <span>이륙 전 안전 사항 체크</span>
+          <span className="text-[0.7rem] px-2 py-0.5 rounded-full bg-[#1e293b] text-[#38bdf8] border border-[#334155]">
+            {checkedCount}/5 완료
+          </span>
         </h2>
-        <button
-          id="btn-edit-equipment-inline"
-          onClick={onEditEquipment}
-          className="text-xs text-[#4fd1c5] hover:underline"
-        >
-          장비 수정
-        </button>
-      </div>
-
-      <div className="bg-[#191c24] rounded-[16px] p-[18px] border border-[#252a36]">
-        {/* Drone item */}
-        <div className="flex items-center gap-[10px] py-2 text-[0.9rem] text-[#e2e8f0] border-b border-[#252a36]">
-          <svg className="w-[18px] h-[18px] fill-[#4fd1c5] shrink-0" viewBox="0 0 24 24">
-            <path d="M22 9V7h-2V5c0-1.1-.9-2-2-2H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-2h2v-2h-2v-2h2v-2h-2V9h2zm-4 10H4V5h14v14zM6 13h5v5H6zm6-6h4v3h-4zM6 7h5v5H6zm6 5h4v6h-4z" />
-          </svg>
-          <span className="font-medium truncate">{equipment.droneModel}</span>
-        </div>
-
-        {/* Battery item */}
-        <div className="flex items-center gap-[10px] py-2 text-[0.9rem] text-[#e2e8f0]">
-          <svg className="w-[18px] h-[18px] fill-[#4fd1c5] shrink-0" viewBox="0 0 24 24">
-            <path d="M15.67 4H14V2h-4v2H8.33C7.6 4 7 4.6 7 5.33v15.33C7 21.4 7.6 22 8.33 22h7.33c.74 0 1.34-.6 1.34-1.33V5.33C17 4.6 16.4 4 15.67 4zM11 20v-5.5H9L13 7v5.5h2L11 20z" />
-          </svg>
-          <span className="font-medium truncate">{equipment.batteryModel}</span>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setAllChecks(!allChecked)}
+            className="text-xs text-[#94a3b8] hover:text-white transition-colors"
+          >
+            {allChecked ? '초기화' : '전체 확인'}
+          </button>
+          <span className="text-[#334155] text-xs">|</span>
+          <button
+            id="btn-edit-equipment-inline"
+            onClick={onEditEquipment}
+            className="text-xs text-[#4fd1c5] hover:underline"
+          >
+            기체·배터리 설정
+          </button>
         </div>
       </div>
 
-      {/* 5. 비행 전 종합 안전 점검 배너 */}
-      <div className="bg-[#151821] rounded-[14px] p-3 border border-[#232936] text-[0.8rem]">
-        <div className="flex items-center justify-between text-gray-400">
-          <div className="flex items-center gap-1.5 text-[#00E676]">
-            <CheckCircle2 size={14} />
-            <span className="font-semibold text-white">비행 전 자이로/센서 점검 정상</span>
+      {/* 안전 체크리스트 & 등록 장비 카드 */}
+      <div className="bg-[#191c24] rounded-[16px] p-[16px] border border-[#252a36] space-y-3">
+        {/* 등록된 기체 / 배터리 요약 칩 */}
+        <div className="grid grid-cols-2 gap-2 pb-2.5 border-b border-[#252a36] text-xs">
+          <div className="flex items-center gap-1.5 bg-[#12141a] px-2.5 py-1.5 rounded-lg border border-[#222838]">
+            <span className="text-[#4fd1c5] font-bold text-[10px]">기체</span>
+            <span className="text-gray-200 truncate font-medium">{equipment.droneModel}</span>
           </div>
-          <span className="text-[0.72rem] text-gray-400">GPS 19개 위성 연결됨</span>
+          <div className="flex items-center gap-1.5 bg-[#12141a] px-2.5 py-1.5 rounded-lg border border-[#222838]">
+            <span className="text-[#4fd1c5] font-bold text-[10px]">배터리</span>
+            <span className="text-gray-200 truncate font-medium">{equipment.batteryModel}</span>
+          </div>
+        </div>
+
+        {/* 인터랙티브 안전 점검 항목 5종 */}
+        <div className="space-y-1.5">
+          {/* 항목 1 */}
+          <div
+            onClick={() => toggleCheck('propeller')}
+            className={`flex items-center gap-2.5 p-2.5 rounded-xl cursor-pointer border transition-all ${
+              checklist.propeller
+                ? 'bg-[#12171f] border-[#00E676]/30 text-gray-200'
+                : 'bg-[#151821] border-[#252a36] text-gray-400'
+            }`}
+          >
+            <div
+              className={`w-4 h-4 rounded flex items-center justify-center shrink-0 border ${
+                checklist.propeller
+                  ? 'bg-[#00E676] border-[#00E676] text-black'
+                  : 'border-gray-500 bg-transparent'
+              }`}
+            >
+              {checklist.propeller && <Check size={12} strokeWidth={3} />}
+            </div>
+            <span className="text-xs">1. 기체 외관 및 프로펠러 체결·균열 점검</span>
+          </div>
+
+          {/* 항목 2 */}
+          <div
+            onClick={() => toggleCheck('battery')}
+            className={`flex items-center gap-2.5 p-2.5 rounded-xl cursor-pointer border transition-all ${
+              checklist.battery
+                ? 'bg-[#12171f] border-[#00E676]/30 text-gray-200'
+                : 'bg-[#151821] border-[#252a36] text-gray-400'
+            }`}
+          >
+            <div
+              className={`w-4 h-4 rounded flex items-center justify-center shrink-0 border ${
+                checklist.battery
+                  ? 'bg-[#00E676] border-[#00E676] text-black'
+                  : 'border-gray-500 bg-transparent'
+              }`}
+            >
+              {checklist.battery && <Check size={12} strokeWidth={3} />}
+            </div>
+            <span className="text-xs">2. 배터리 결합 잠금 및 전압 밸런스(셀 편차) 확인</span>
+          </div>
+
+          {/* 항목 3 */}
+          <div
+            onClick={() => toggleCheck('sensor')}
+            className={`flex items-center gap-2.5 p-2.5 rounded-xl cursor-pointer border transition-all ${
+              checklist.sensor
+                ? 'bg-[#12171f] border-[#00E676]/30 text-gray-200'
+                : 'bg-[#151821] border-[#252a36] text-gray-400'
+            }`}
+          >
+            <div
+              className={`w-4 h-4 rounded flex items-center justify-center shrink-0 border ${
+                checklist.sensor
+                  ? 'bg-[#00E676] border-[#00E676] text-black'
+                  : 'border-gray-500 bg-transparent'
+              }`}
+            >
+              {checklist.sensor && <Check size={12} strokeWidth={3} />}
+            </div>
+            <span className="text-xs">3. 자이로·나침반 캘리브레이션 및 GPS 10개 이상 확인</span>
+          </div>
+
+          {/* 항목 4 */}
+          <div
+            onClick={() => toggleCheck('failsafe')}
+            className={`flex items-center gap-2.5 p-2.5 rounded-xl cursor-pointer border transition-all ${
+              checklist.failsafe
+                ? 'bg-[#12171f] border-[#00E676]/30 text-gray-200'
+                : 'bg-[#151821] border-[#252a36] text-gray-400'
+            }`}
+          >
+            <div
+              className={`w-4 h-4 rounded flex items-center justify-center shrink-0 border ${
+                checklist.failsafe
+                  ? 'bg-[#00E676] border-[#00E676] text-black'
+                  : 'border-gray-500 bg-transparent'
+              }`}
+            >
+              {checklist.failsafe && <Check size={12} strokeWidth={3} />}
+            </div>
+            <span className="text-xs">4. 비상 자동 복귀(RTH) 고도 설정 및 Failsafe 동작 확인</span>
+          </div>
+
+          {/* 항목 5 */}
+          <div
+            onClick={() => toggleCheck('surroundings')}
+            className={`flex items-center gap-2.5 p-2.5 rounded-xl cursor-pointer border transition-all ${
+              checklist.surroundings
+                ? 'bg-[#12171f] border-[#00E676]/30 text-gray-200'
+                : 'bg-[#151821] border-[#252a36] text-gray-400'
+            }`}
+          >
+            <div
+              className={`w-4 h-4 rounded flex items-center justify-center shrink-0 border ${
+                checklist.surroundings
+                  ? 'bg-[#00E676] border-[#00E676] text-black'
+                  : 'border-gray-500 bg-transparent'
+              }`}
+            >
+              {checklist.surroundings && <Check size={12} strokeWidth={3} />}
+            </div>
+            <span className="text-xs">5. 이착륙 반경 내 인원 통제 및 고압선·장애물 확인</span>
+          </div>
+        </div>
+
+        {/* 체크 종합 상태 배너 */}
+        <div className="pt-1">
+          {allChecked ? (
+            <div className="flex items-center justify-between text-xs text-[#00E676] bg-[#00E676]/10 px-3 py-2 rounded-lg border border-[#00E676]/25 font-semibold">
+              <span className="flex items-center gap-1.5">
+                <CheckCircle2 size={14} />
+                모든 이륙 전 점검 완료 (비행 준비 완료)
+              </span>
+              <span className="text-[10px] text-gray-400">정상</span>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between text-xs text-[#FFD600] bg-[#FFD600]/10 px-3 py-2 rounded-lg border border-[#FFD600]/25 font-medium">
+              <span className="flex items-center gap-1.5">
+                <AlertTriangle size={14} />
+                미점검 항목이 남아있습니다 ({5 - checkedCount}개)
+              </span>
+              <span className="text-[10px] text-gray-400">확인 필요</span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -375,7 +525,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
         </div>
       )}
 
-      {/* 6. Action Button at Bottom */}
+      {/* 6. 이륙 액션 버튼 */}
       <div className="mt-auto pt-2">
         <button
           id="btn-takeoff"
