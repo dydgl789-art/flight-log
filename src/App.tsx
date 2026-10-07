@@ -104,8 +104,8 @@ export default function App() {
     };
   }, []);
 
-  // Handle Takeoff
-  const handleTakeoff = () => {
+  // Handle Takeoff (DashboardScreen에서 넘겨주는 목표/주기 인자도 유연하게 수용)
+  const handleTakeoff = (targetMinutes?: number, voiceInterval?: number) => {
     if (airspaceResult.badgeColor === 'danger') {
       alert('현재 위치는 비행 금지 구역입니다. 특별 비행 승인 없이 이륙할 수 없습니다.');
       return;
