@@ -14,6 +14,8 @@ import {
   Map,
   RotateCw,
   Check,
+  Timer,
+  Volume2,
 } from 'lucide-react';
 
 interface DashboardScreenProps {
@@ -22,7 +24,7 @@ interface DashboardScreenProps {
   weatherData: WeatherData | null;
   airspaceResult: AirspaceCheckResult;
   currentLocationName: string;
-  onTakeoff: () => void;
+  onTakeoff: (targetMinutes?: number, voiceInterval?: number) => void;
   onEditEquipment: () => void;
   onOpenMap: () => void;
   onRefreshWeather: () => void;
@@ -44,6 +46,10 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
   onSimulateKp,
 }) => {
   const [showKpInfo, setShowKpInfo] = useState(false);
+
+  // 비행 타이머 & 음성 알림 설정 (기본값: 목표 15분 / 음성 주기 2분)
+  const [targetMinutes, setTargetMinutes] = useState<number>(15);
+  const [voiceIntervalMinutes, setVoiceIntervalMinutes] = useState<number>(2);
 
   // 이륙 전 체크리스트 상태 (기본 5개 항목)
   const [checklist, setChecklist] = useState<Record<string, boolean>>({
@@ -107,6 +113,16 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
     kpData.level === 'danger' ||
     windLevel === 'danger' ||
     airspaceResult.badgeColor === 'danger';
+
+  // 이륙 핸들러 (설정값을 저장하거나 넘겨줌)
+  const handleStartFlight = () => {
+    // 로컬 스토리지에 타이머 설정 저장 (HudScreen이나 다른 컴포넌트에서도 참조 가능하도록)
+    localStorage.setItem('flight_target_minutes', String(targetMinutes));
+    localStorage.setItem('flight_voice_interval', String(voiceIntervalMinutes));
+
+    // 이륙 실행
+    onTakeoff(targetMinutes, voiceIntervalMinutes);
+  };
 
   return (
     <div id="screen-dashboard" className="flex-1 flex flex-col p-[18px] space-y-[14px]">
@@ -341,7 +357,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
         </button>
       </div>
 
-      {/* 4. 이륙 전 필수 안전 점검 섹션 (업그레이드 완료) */}
+      {/* 4. 이륙 전 필수 안전 점검 섹션 */}
       <div className="flex items-center justify-between">
         <h2 className="text-[0.85rem] uppercase tracking-[1px] text-[#718096] font-bold flex items-center gap-1.5">
           <span>이륙 전 안전 사항 체크</span>
@@ -383,7 +399,6 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
 
         {/* 인터랙티브 안전 점검 항목 5종 */}
         <div className="space-y-1.5">
-          {/* 항목 1 */}
           <div
             onClick={() => toggleCheck('propeller')}
             className={`flex items-center gap-2.5 p-2.5 rounded-xl cursor-pointer border transition-all ${
@@ -404,7 +419,6 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
             <span className="text-xs">1. 기체 외관 및 프로펠러 체결·균열 점검</span>
           </div>
 
-          {/* 항목 2 */}
           <div
             onClick={() => toggleCheck('battery')}
             className={`flex items-center gap-2.5 p-2.5 rounded-xl cursor-pointer border transition-all ${
@@ -425,7 +439,6 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
             <span className="text-xs">2. 배터리 결합 잠금 및 전압 밸런스(셀 편차) 확인</span>
           </div>
 
-          {/* 항목 3 */}
           <div
             onClick={() => toggleCheck('sensor')}
             className={`flex items-center gap-2.5 p-2.5 rounded-xl cursor-pointer border transition-all ${
@@ -446,7 +459,6 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
             <span className="text-xs">3. 자이로·나침반 캘리브레이션 및 GPS 10개 이상 확인</span>
           </div>
 
-          {/* 항목 4 */}
           <div
             onClick={() => toggleCheck('failsafe')}
             className={`flex items-center gap-2.5 p-2.5 rounded-xl cursor-pointer border transition-all ${
@@ -467,7 +479,6 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
             <span className="text-xs">4. 비상 자동 복귀(RTH) 고도 설정 및 Failsafe 동작 확인</span>
           </div>
 
-          {/* 항목 5 */}
           <div
             onClick={() => toggleCheck('surroundings')}
             className={`flex items-center gap-2.5 p-2.5 rounded-xl cursor-pointer border transition-all ${
@@ -525,11 +536,59 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
         </div>
       )}
 
-      {/* 6. 이륙 액션 버튼 */}
+      {/* 5. 비행 타이머 연동 옵션 (세 번째 사진의 설정 기능 통합) */}
+      <div className="bg-[#191c24] rounded-[14px] p-3 border border-[#252a36] text-xs">
+        <div className="flex items-center justify-between mb-2">
+          <span className="font-semibold text-gray-300 flex items-center gap-1.5">
+            <Timer size={14} className="text-[#38bdf8]" />
+            비행 타이머 & 음성 알림 설정
+          </span>
+          <span className="text-[11px] text-gray-500">이륙 시 자동 연동</span>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2">
+          {/* 목표 비행시간 설정 */}
+          <div className="bg-[#12141a] p-2 rounded-lg border border-[#222838] flex items-center justify-between">
+            <span className="text-gray-400 text-[11px]">목표 비행시간</span>
+            <select
+              value={targetMinutes}
+              onChange={(e) => setTargetMinutes(Number(e.target.value))}
+              className="bg-[#1a202c] text-[#38bdf8] font-bold text-xs border border-[#334155] rounded px-2 py-1 outline-none"
+            >
+              <option value={10}>10분</option>
+              <option value={15}>15분</option>
+              <option value={20}>20분</option>
+              <option value={25}>25분</option>
+              <option value={30}>30분</option>
+            </select>
+          </div>
+
+          {/* 경과 음성 안내 주기 설정 */}
+          <div className="bg-[#12141a] p-2 rounded-lg border border-[#222838] flex items-center justify-between">
+            <span className="text-gray-400 text-[11px] flex items-center gap-1">
+              <Volume2 size={12} className="text-[#00E676]" />
+              음성 알림 주기
+            </span>
+            <select
+              value={voiceIntervalMinutes}
+              onChange={(e) => setVoiceIntervalMinutes(Number(e.target.value))}
+              className="bg-[#1a202c] text-[#00E676] font-bold text-xs border border-[#334155] rounded px-2 py-1 outline-none"
+            >
+              <option value={1}>매 1분</option>
+              <option value={2}>매 2분</option>
+              <option value={3}>매 3분</option>
+              <option value={5}>매 5분</option>
+              <option value={0}>알림 끄기</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* 6. 이륙 액션 버튼 (클릭 시 타이머 설정값과 함께 실행) */}
       <div className="mt-auto pt-2">
         <button
           id="btn-takeoff"
-          onClick={onTakeoff}
+          onClick={handleStartFlight}
           disabled={airspaceResult.badgeColor === 'danger'}
           className={`w-full h-[54px] rounded-[14px] text-[1.05rem] font-bold cursor-pointer flex items-center justify-center gap-2 transition-all shadow-lg ${
             airspaceResult.badgeColor === 'danger'
