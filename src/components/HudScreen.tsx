@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { formatDuration } from '../utils/noaa';
 import { Equipment } from '../types';
-import { Play, Pause, Zap, Flame, Compass } from 'lucide-react';
+import { Play, Pause, Zap, Flame, Compass, Volume2, Timer } from 'lucide-react';
 
 interface HudScreenProps {
   equipment: Equipment;
@@ -27,6 +27,94 @@ export const HudScreen: React.FC<HudScreenProps> = ({
   windSpeed = 2.4,
 }) => {
   const [autoDischarge, setAutoDischarge] = useState(false);
+
+  // 로컬 스토리지에서 타이머 설정값 불러오기 (기본값: 목표 15분, 음성 주기 2분)
+  const targetMinutes = Number(localStorage.getItem('flight_target_minutes') || 15);
+  const voiceIntervalMinutes = Number(localStorage.getItem('flight_voice_interval') || 2);
+
+  const wakeLockRef = useRef<any>(null);
+  const lastAnnouncedMinuteRef = useRef<number>(-1);
+
+  // 1. 한국어 음성 안내 (TTS) 함수
+  const speak = (text: string) => {
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel(); // 이전 음성 취소 후 재생
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = 'ko-KR';
+      utterance.rate = 1.0;
+      utterance.pitch = 1.0;
+      window.speechSynthesis.speak(utterance);
+    }
+  };
+
+  // 2. 비행 시작 시 초기화 (Wake Lock 활성화 + 시작 음성 안내)
+  useEffect(() => {
+    // 화면 꺼짐 방지
+    const requestWakeLock = async () => {
+      try {
+        if ('wakeLock' in navigator) {
+          wakeLockRef.current = await (navigator as any).wakeLock.request('screen');
+        }
+      } catch (err) {
+        console.warn('Wake Lock 활성화 실패:', err);
+      }
+    };
+    requestWakeLock();
+
+    // 이륙 안내 음성
+    speak('비행을 시작합니다. 안전 비행 하십시오.');
+
+    // 컴포넌트 언마운트 시 화면 꺼짐 방지 해제
+    return () => {
+      if (wakeLockRef.current) {
+        wakeLockRef.current.release().then(() => {
+          wakeLockRef.current = null;
+        });
+      }
+    };
+  }, []);
+
+  // 3. 비행 시간(초)에 따른 실시간 음성 알림 및 목표 시간 도달 감지
+  useEffect(() => {
+    if (elapsedSeconds <= 0) return;
+
+    const currentMinute = Math.floor(elapsedSeconds / 60);
+    const isMinuteExact = elapsedSeconds % 60 === 0;
+
+    // 주기적 음성 알림 (예: 매 2분 정각)
+    if (
+      voiceIntervalMinutes > 0 &&
+      isMinuteExact &&
+      currentMinute > 0 &&
+      currentMinute % voiceIntervalMinutes === 0 &&
+      lastAnnouncedMinuteRef.current !== currentMinute
+    ) {
+      lastAnnouncedMinuteRef.current = currentMinute;
+      speak(`현재 비행 시간 ${currentMinute}분 경과되었습니다.`);
+    }
+
+    // 목표 비행 시간 도달 알림
+    if (elapsedSeconds === targetMinutes * 60) {
+      speak(`목표 비행 시간 ${targetMinutes}분에 도달했습니다. 착륙을 준비하십시오.`);
+      if ('vibrate' in navigator) {
+        navigator.vibrate([300, 100, 300, 100, 500]);
+      }
+    }
+  }, [elapsedSeconds, targetMinutes, voiceIntervalMinutes]);
+
+  // 4. 착륙 버튼 핸들러 (음성 안내 후 기존 onLand 호출)
+  const handleLandClick = () => {
+    const finalMinutes = Math.floor(elapsedSeconds / 60);
+    const finalSeconds = elapsedSeconds % 60;
+
+    speak(`비행이 종료되었습니다. 총 비행 시간은 ${finalMinutes}분 ${finalSeconds}초입니다.`);
+
+    if (wakeLockRef.current) {
+      wakeLockRef.current.release();
+    }
+
+    onLand();
+  };
 
   // Auto discharge simulation
   useEffect(() => {
@@ -58,16 +146,20 @@ export const HudScreen: React.FC<HudScreenProps> = ({
 
   const consumed = Math.max(0, startBattery - currentBattery);
 
+  // 목표 시간 대비 진행률 (%)
+  const targetTotalSeconds = targetMinutes * 60;
+  const flightProgress = Math.min(100, Math.round((elapsedSeconds / targetTotalSeconds) * 100));
+
   return (
     <div id="screen-hud" className="flex-1 flex flex-col p-[18px]">
       {/* 1. HUD Status Header */}
-      <div className="flex items-center justify-center gap-2 my-2.5 mb-5 text-[0.8rem] font-bold tracking-[1.5px] text-[#00E676]">
+      <div className="flex items-center justify-center gap-2 my-2.5 mb-4 text-[0.8rem] font-bold tracking-[1.5px] text-[#00E676]">
         <div className="w-[9px] h-[9px] rounded-full bg-[#00E676] animate-pulse" />
         <span>RECORDING IN PROGRESS</span>
       </div>
 
       {/* 2. Timer Box */}
-      <div className="bg-[#141820] rounded-[20px] border border-[#2a3142] p-[28px_16px] text-center mb-[18px] shadow-lg shadow-black/40">
+      <div className="bg-[#141820] rounded-[20px] border border-[#2a3142] p-[24px_16px] text-center mb-[14px] shadow-lg shadow-black/40">
         <div className="text-[0.75rem] tracking-[1.5px] text-[#718096] mb-2 font-bold uppercase">
           FLIGHT DURATION
         </div>
@@ -77,6 +169,25 @@ export const HudScreen: React.FC<HudScreenProps> = ({
         >
           {formatDuration(elapsedSeconds)}
         </div>
+
+        {/* 목표 시간 대비 프로그레스 바 */}
+        <div className="mt-4 px-4">
+          <div className="flex justify-between items-center text-[11px] mb-1">
+            <span className="text-gray-400 flex items-center gap-1">
+              <Timer size={12} className="text-[#38bdf8]" /> 목표 {targetMinutes}분
+            </span>
+            <span className="text-[#38bdf8] font-bold">{flightProgress}%</span>
+          </div>
+          <div className="w-full h-[6px] bg-[#252a36] rounded-full overflow-hidden">
+            <div
+              className={`h-full transition-all duration-500 ${
+                flightProgress >= 100 ? 'bg-[#FF1744]' : 'bg-[#38bdf8]'
+              }`}
+              style={{ width: `${flightProgress}%` }}
+            />
+          </div>
+        </div>
+
         <div className="mt-3 flex flex-wrap items-center justify-center gap-3 text-xs text-gray-400">
           <span className="flex items-center gap-1">
             <Compass size={13} className="text-[#4fd1c5]" /> {equipment.droneModel}
@@ -87,6 +198,11 @@ export const HudScreen: React.FC<HudScreenProps> = ({
           {windSpeed !== undefined && (
             <span className="flex items-center gap-1 text-gray-300">
               <span className="text-[#00E676] font-bold">풍속:</span> {windSpeed} m/s
+            </span>
+          )}
+          {voiceIntervalMinutes > 0 && (
+            <span className="flex items-center gap-1 text-[#00E676]">
+              <Volume2 size={12} /> {voiceIntervalMinutes}분 주기 안내
             </span>
           )}
         </div>
@@ -173,7 +289,7 @@ export const HudScreen: React.FC<HudScreenProps> = ({
       <div className="mt-auto pt-4">
         <button
           id="btn-land"
-          onClick={onLand}
+          onClick={handleLandClick}
           className="w-full h-[54px] bg-[#E53935] hover:bg-[#D32F2F] active:scale-[0.99] text-white rounded-[14px] text-[1.05rem] font-bold cursor-pointer flex items-center justify-center gap-2 transition-all shadow-lg shadow-[#E53935]/25"
         >
           <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">
