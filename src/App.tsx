@@ -23,9 +23,8 @@ import {
   playLowBatteryWarningSound,
 } from './utils/audio';
 
-// 📡 방금 생성하신 드론 Web Serial 연동 컴포넌트 불러오기
-// @ts-ignore (jsx 파일 ts import 허용)
-import DroneConnector from './DroneConnector';
+// 📡 components 폴더 내 DroneConnector 컴포넌트 정확한 경로로 불러오기
+import DroneConnector from './components/DroneConnector';
 
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState<ScreenType>('dashboard');
@@ -293,7 +292,7 @@ export default function App() {
           onOpenEquipmentModal={() => setIsEquipmentModalOpen(true)}
         />
 
-        {/* 📡 실시간 하드웨어 드론 연결 컨트롤러 (상시 통신 유지) */}
+        {/* 📡 실시간 하드웨어 드론 연결 컨트롤러 */}
         <div className="px-4 pt-2">
           <DroneConnector
             onTelemetryUpdate={handleDroneTelemetryUpdate}
