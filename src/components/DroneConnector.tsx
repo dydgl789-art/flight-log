@@ -1,14 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
 
-// Web Serial 브라우저 API 타입 선언 (TS 컴파일 통과용)
-declare global {
-  interface Navigator {
-    serial?: {
-      requestPort: () => Promise<any>;
-    };
-  }
-}
-
 export interface TelemetryData {
   lat: string;
   lon: string;
@@ -44,7 +35,7 @@ export default function DroneConnector({ onTelemetryUpdate, onFlightStatusChange
   const readerRef = useRef<any>(null);
   const isReadingRef = useRef<boolean>(false);
 
-  // MAVLink v1 기본 패킷 파싱 로직
+  // MAVLink v1 기본 패킷 파싱
   const parseMavlinkV1 = (buffer: Uint8Array) => {
     let i = 0;
     while (i < buffer.length) {
@@ -115,13 +106,14 @@ export default function DroneConnector({ onTelemetryUpdate, onFlightStatusChange
   };
 
   const handleConnect = async () => {
-    if (!navigator.serial) {
+    const nav = navigator as any;
+    if (!nav || !nav.serial) {
       alert('현재 브라우저는 Web Serial을 지원하지 않습니다. Chrome 또는 Edge 브라우저를 사용해 주세요.');
       return;
     }
 
     try {
-      const port = await navigator.serial.requestPort();
+      const port = await nav.serial.requestPort();
       await port.open({ baudRate: Number(baudRate) });
 
       portRef.current = port;
