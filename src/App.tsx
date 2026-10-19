@@ -23,6 +23,10 @@ import {
   playLowBatteryWarningSound,
 } from './utils/audio';
 
+// 📡 방금 생성하신 드론 Web Serial 연동 컴포넌트 불러오기
+// @ts-ignore (jsx 파일 ts import 허용)
+import DroneConnector from './DroneConnector';
+
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState<ScreenType>('dashboard');
 
@@ -104,8 +108,8 @@ export default function App() {
     };
   }, []);
 
-  // Handle Takeoff (DashboardScreen에서 넘겨주는 목표/주기 인자도 유연하게 수용)
-  const handleTakeoff = (targetMinutes?: number, voiceInterval?: number) => {
+  // Handle Takeoff
+  const handleTakeoff = useCallback((targetMinutes?: number, voiceInterval?: number) => {
     if (airspaceResult.badgeColor === 'danger') {
       alert('현재 위치는 비행 금지 구역입니다. 특별 비행 승인 없이 이륙할 수 없습니다.');
       return;
@@ -124,10 +128,10 @@ export default function App() {
     timerRef.current = window.setInterval(() => {
       setElapsedSeconds((prev) => prev + 1);
     }, 1000);
-  };
+  }, [airspaceResult.badgeColor, soundEnabled, currentBattery]);
 
   // Handle Landing
-  const handleLand = () => {
+  const handleLand = useCallback(() => {
     if (timerRef.current) {
       clearInterval(timerRef.current);
       timerRef.current = null;
@@ -138,7 +142,43 @@ export default function App() {
     }
 
     setIsCompleteModalOpen(true);
-  };
+  }, [soundEnabled]);
+
+  // -------------------------------------------------------------------------
+  // 📡 실제 드론 텔레메트리 연동 핸들러
+  // -------------------------------------------------------------------------
+  const handleDroneTelemetryUpdate = useCallback((data: { lat: string; lon: string; alt: string; batteryRemaining: number }) => {
+    const numLat = parseFloat(data.lat);
+    const numLng = parseFloat(data.lon);
+
+    // 유효한 GPS 좌표 수신 시 현재 위치 및 공역 자동 동기화
+    if (!isNaN(numLat) && !isNaN(numLng) && numLat !== 0 && numLng !== 0) {
+      if (Math.abs(currentLat - numLat) > 0.0005 || Math.abs(currentLng - numLng) > 0.0005) {
+        setCurrentLat(numLat);
+        setCurrentLng(numLng);
+        setCurrentLocationName(`실시간 드론 위치 (${numLat.toFixed(4)}, ${numLng.toFixed(4)})`);
+        setAirspaceResult(checkAirspace(numLat, numLng));
+      }
+    }
+
+    // 배터리 실시간 잔량 연동
+    if (data.batteryRemaining > 0) {
+      setCurrentBattery(data.batteryRemaining);
+    }
+  }, [currentLat, currentLng]);
+
+  // 드론 시동(ARM) 감지 시 자동 이륙/착륙 제어
+  const handleDroneFlightStatusChange = useCallback((isArmed: boolean) => {
+    if (isArmed) {
+      if (currentScreen !== 'hud') {
+        handleTakeoff();
+      }
+    } else {
+      if (currentScreen === 'hud') {
+        handleLand();
+      }
+    }
+  }, [currentScreen, handleTakeoff, handleLand]);
 
   // Battery warning sound
   const handleBatteryWarning = useCallback(() => {
@@ -252,6 +292,14 @@ export default function App() {
           onToggleSound={() => setSoundEnabled(!soundEnabled)}
           onOpenEquipmentModal={() => setIsEquipmentModalOpen(true)}
         />
+
+        {/* 📡 실시간 하드웨어 드론 연결 컨트롤러 (상시 통신 유지) */}
+        <div className="px-4 pt-2">
+          <DroneConnector
+            onTelemetryUpdate={handleDroneTelemetryUpdate}
+            onFlightStatusChange={handleDroneFlightStatusChange}
+          />
+        </div>
 
         {/* Dashboard Screen */}
         {currentScreen === 'dashboard' && (
