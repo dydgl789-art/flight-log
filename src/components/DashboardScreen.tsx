@@ -116,6 +116,9 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
 
   // 이륙 핸들러 (설정값을 저장하거나 넘겨줌)
   const handleStartFlight = () => {
+    // 체크리스트가 전부 완료되지 않았거나 공역 금지 구역인 경우 실행 차단
+    if (!allChecked || airspaceResult.badgeColor === 'danger') return;
+
     // 로컬 스토리지에 타이머 설정 저장 (HudScreen이나 다른 컴포넌트에서도 참조 가능하도록)
     localStorage.setItem('flight_target_minutes', String(targetMinutes));
     localStorage.setItem('flight_voice_interval', String(voiceIntervalMinutes));
@@ -257,7 +260,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
         {/* 위치 선택 트리거 */}
         <div className="flex items-center justify-between py-1 mb-2 text-xs border-b border-[#252a36]">
           <div className="flex items-center gap-1 text-[#e2e8f0] font-semibold truncate">
-            <MapPin size={13} className="text-[#1E88E5] shrink-0" />
+            <MapPin size={13} className="text-[#1E88E5]" />
             <span className="truncate">{currentLocationName}</span>
           </div>
           <button
@@ -536,7 +539,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
         </div>
       )}
 
-      {/* 5. 비행 타이머 연동 옵션 (세 번째 사진의 설정 기능 통합) */}
+      {/* 5. 비행 타이머 연동 옵션 */}
       <div className="bg-[#191c24] rounded-[14px] p-3 border border-[#252a36] text-xs">
         <div className="flex items-center justify-between mb-2">
           <span className="font-semibold text-gray-300 flex items-center gap-1.5">
@@ -584,16 +587,18 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
         </div>
       </div>
 
-      {/* 6. 이륙 액션 버튼 (클릭 시 타이머 설정값과 함께 실행) */}
+      {/* 6. 이륙 액션 버튼 (체크리스트가 모두 완료되어야만 활성화) */}
       <div className="mt-auto pt-2">
         <button
           id="btn-takeoff"
           onClick={handleStartFlight}
-          disabled={airspaceResult.badgeColor === 'danger'}
-          className={`w-full h-[54px] rounded-[14px] text-[1.05rem] font-bold cursor-pointer flex items-center justify-center gap-2 transition-all shadow-lg ${
+          disabled={!allChecked || airspaceResult.badgeColor === 'danger'}
+          className={`w-full h-[54px] rounded-[14px] text-[1.05rem] font-bold flex items-center justify-center gap-2 transition-all ${
             airspaceResult.badgeColor === 'danger'
               ? 'bg-gray-700 text-gray-400 cursor-not-allowed shadow-none'
-              : 'bg-[#1E88E5] hover:bg-[#1976D2] active:scale-[0.99] text-white shadow-[#1E88E5]/25'
+              : !allChecked
+              ? 'bg-[#1b2230] text-[#475569] border border-[#2d3748] cursor-not-allowed shadow-none'
+              : 'bg-[#1E88E5] hover:bg-[#1976D2] active:scale-[0.99] text-white cursor-pointer shadow-lg shadow-[#1E88E5]/25'
           }`}
         >
           <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">
@@ -602,6 +607,8 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
           <span>
             {airspaceResult.badgeColor === 'danger'
               ? '비행 금지 구역 (이륙 불가)'
+              : !allChecked
+              ? `체크리스트 완료 필요 (${checkedCount}/5)`
               : '비행 기록 시작 (Takeoff)'}
           </span>
         </button>
